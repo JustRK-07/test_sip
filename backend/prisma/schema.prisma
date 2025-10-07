@@ -1,0 +1,150 @@
+// Prisma Schema for Campaign-Based Calling System
+// Database: SQLite (for testing) / PostgreSQL (for production)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Campaign Model
+model Campaign {
+  id              String    @id @default(cuid())
+  name            String
+  description     String?
+  status          String    @default("draft")
+  // Status values: draft, scheduled, active, paused, completed, stopped, failed
+
+  maxConcurrent   Int       @default(3) @map("max_concurrent")
+  retryFailed     Boolean   @default(true) @map("retry_failed")
+  retryAttempts   Int       @default(1) @map("retry_attempts")
+  callDelay       Int       @default(2000) @map("call_delay") // milliseconds
+
+  scheduledAt     DateTime? @map("scheduled_at")
+  startedAt       DateTime? @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+
+  // Statistics
+  totalCalls      Int       @default(0) @map("total_calls")
+  successfulCalls Int       @default(0) @map("successful_calls")
+  failedCalls     Int       @default(0) @map("failed_calls")
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  leads           Lead[]
+  callLogs        CallLog[]
+  campaignAgents  CampaignAgent[]
+
+  @@index([status])
+  @@index([scheduledAt])
+  @@map("campaigns")
+}
+
+// Agent Model
+model Agent {
+  id                 String   @id @default(cuid())
+  name               String
+  description        String?
+  voiceId            String?  @map("voice_id")
+  personality        String?
+  systemPrompt       String?  @map("system_prompt")
+  isActive           Boolean  @default(true) @map("is_active")
+
+  metadata           String?  // JSON as string for SQLite
+
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  campaignAgents     CampaignAgent[]
+  callLogs           CallLog[]
+
+  @@index([isActive])
+  @@map("agents")
+}
+
+// Campaign-Agent Many-to-Many Relationship
+model CampaignAgent {
+  id          String   @id @default(cuid())
+  campaignId  String   @map("campaign_id")
+  agentId     String   @map("agent_id")
+  isPrimary   Boolean  @default(false) @map("is_primary")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, agentId])
+  @@index([campaignId])
+  @@index([agentId])
+  @@map("campaign_agents")
+}
+
+// Lead Model
+model Lead {
+  id           String    @id @default(cuid())
+  campaignId   String    @map("campaign_id")
+  phoneNumber  String    @map("phone_number")
+  name         String?
+  email        String?
+  status       String    @default("pending")
+  // Status values: pending, calling, answered, completed, no-answer, busy, failed
+
+  priority     Int       @default(1)
+  attempts     Int       @default(0)
+  metadata     String?   // JSON as string for SQLite
+
+  lastCallAt   DateTime? @map("last_call_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  campaign     Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  callLogs     CallLog[]
+
+  @@index([campaignId, status])
+  @@index([phoneNumber])
+  @@index([status])
+  @@map("leads")
+}
+
+// Call Log Model
+model CallLog {
+  id           String    @id @default(cuid())
+  leadId       String    @map("lead_id")
+  agentId      String?   @map("agent_id")
+  campaignId   String    @map("campaign_id")
+
+  phoneNumber  String    @map("phone_number")
+  callSid      String?   @map("call_sid")
+  roomName     String?   @map("room_name")
+  dispatchId   String?   @map("dispatch_id")
+  status       String
+  // Status values: initiated, ringing, answered, in-progress, completed, no-answer, busy, failed, canceled
+
+  duration     Int?      @default(0) // in milliseconds
+  recordingUrl String?   @map("recording_url")
+  error        String?   // Error message
+  metadata     String?   // JSON as string for SQLite
+
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  lead         Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  agent        Agent?    @relation(fields: [agentId], references: [id])
+  campaign     Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([campaignId])
+  @@index([status])
+  @@index([callSid])
+  @@map("call_logs")
+}

@@ -1,0 +1,38 @@
+[
+  {
+    "phoneNumber": "+919529117230",
+    "name": "Rushabh",
+    "priority": 1,
+    "metadata": {
+      "source": "primary",
+      "notes": "Test call 1"
+    }
+  },
+  {
+    "phoneNumber": "+918329823146",
+    "name": "Contact 2",
+    "priority": 1,
+    "metadata": {
+      "source": "secondary",
+      "notes": "Test call 2"
+    }
+  },
+  {
+    "phoneNumber": "+918390288495",
+    "name": "Contact 3",
+    "priority": 1,
+    "metadata": {
+      "source": "tertiary",
+      "notes": "Test call 3"
+    }
+  },
+  {
+    "phoneNumber": "+919158480438",
+    "name": "Contact 4",
+    "priority": 1,
+    "metadata": {
+      "source": "new",
+      "notes": "Test call 4"
+    }
+  }
+]

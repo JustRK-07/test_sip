@@ -1,0 +1,53 @@
+{
+  "name": "campaign-calling-backend",
+  "version": "1.0.0",
+  "description": "Campaign-based calling system backend with LiveKit and Twilio integration",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test:campaign": "node test-campaign.js",
+    "prisma:init": "prisma init",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio",
+    "db:seed": "node prisma/seed.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "calling",
+    "campaign",
+    "livekit",
+    "twilio",
+    "sip",
+    "voice-ai"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@prisma/client": "^6.17.0",
+    "body-parser": "^2.2.0",
+    "bull": "^4.16.5",
+    "compression": "^1.8.1",
+    "cors": "^2.8.5",
+    "csv-parser": "^3.2.0",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "helmet": "^8.1.0",
+    "joi": "^18.0.1",
+    "morgan": "^1.10.1",
+    "multer": "^2.0.2",
+    "node-cron": "^4.2.1",
+    "redis": "^5.8.3",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1",
+    "winston": "^3.18.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.0",
+    "nodemon": "^3.1.10",
+    "prisma": "^6.17.0"
+  }
+}

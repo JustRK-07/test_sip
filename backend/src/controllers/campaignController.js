@@ -28,6 +28,9 @@ exports.createCampaign = async (req, res) => {
       callDelay = 2000,
       scheduledAt,
       status = 'draft',
+      agentName,
+      sipTrunkId,
+      callerIdNumber,
     } = req.body;
 
     // Validation
@@ -49,6 +52,9 @@ exports.createCampaign = async (req, res) => {
         callDelay,
         scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
         status,
+        agentName,
+        sipTrunkId,
+        callerIdNumber,
       },
     });
 
@@ -180,6 +186,9 @@ exports.updateCampaign = async (req, res) => {
       retryAttempts,
       callDelay,
       scheduledAt,
+      agentName,
+      sipTrunkId,
+      callerIdNumber,
     } = req.body;
 
     // Check if campaign exists
@@ -212,6 +221,9 @@ exports.updateCampaign = async (req, res) => {
     if (scheduledAt !== undefined) {
       updateData.scheduledAt = scheduledAt ? new Date(scheduledAt) : null;
     }
+    if (agentName !== undefined) updateData.agentName = agentName;
+    if (sipTrunkId !== undefined) updateData.sipTrunkId = sipTrunkId;
+    if (callerIdNumber !== undefined) updateData.callerIdNumber = callerIdNumber;
 
     const campaign = await prisma.campaign.update({
       where: { id },
@@ -324,6 +336,14 @@ exports.startCampaign = async (req, res) => {
       });
     }
 
+    // Validate SIP configuration
+    if (!campaign.sipTrunkId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Campaign must have sipTrunkId configured to start calling',
+      });
+    }
+
     // Update campaign status to active
     await prisma.campaign.update({
       where: { id },
@@ -335,11 +355,15 @@ exports.startCampaign = async (req, res) => {
 
     // Create campaign queue instance
     const campaignQueue = new CampaignQueue({
+      campaignId: campaign.id,
       campaignName: campaign.name,
       maxConcurrent: campaign.maxConcurrent,
       retryFailed: campaign.retryFailed,
       retryAttempts: campaign.retryAttempts,
       callDelay: campaign.callDelay,
+      agentName: campaign.agentName,
+      sipTrunkId: campaign.sipTrunkId,
+      callerIdNumber: campaign.callerIdNumber,
     });
 
     // Setup event listeners to update database
@@ -363,7 +387,8 @@ exports.startCampaign = async (req, res) => {
             phoneNumber: lead.phoneNumber,
             status: 'completed',
             roomName: result.roomName,
-            dispatchId: result.dispatchId,
+            dispatchId: result.dispatchId, // Agent dispatch ID
+            callSid: result.sipCallId, // LiveKit SIP call ID
             duration: result.duration,
             metadata: result,
           },

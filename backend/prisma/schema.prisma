@@ -23,6 +23,11 @@ model Campaign {
   retryAttempts   Int       @default(1) @map("retry_attempts")
   callDelay       Int       @default(2000) @map("call_delay") // milliseconds
 
+  // LiveKit/SIP Configuration
+  agentName       String?   @map("agent_name") // AI agent name (e.g., "telephony-agent")
+  sipTrunkId      String?   @map("sip_trunk_id") // SIP trunk ID for routing calls
+  callerIdNumber  String?   @map("caller_id_number") // Optional caller ID to display
+
   scheduledAt     DateTime? @map("scheduled_at")
   startedAt       DateTime? @map("started_at")
   completedAt     DateTime? @map("completed_at")
@@ -54,6 +59,7 @@ model Agent {
   personality        String?
   systemPrompt       String?  @map("system_prompt")
   isActive           Boolean  @default(true) @map("is_active")
+  maxConcurrentCalls Int      @default(3) @map("max_concurrent_calls") // Max concurrent calls per agent
 
   metadata           String?  // JSON as string for SQLite
 

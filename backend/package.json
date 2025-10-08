@@ -13,7 +13,9 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "db:seed": "node prisma/seed.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "check:unused": "bash scripts/check-unused-code.sh",
+    "lint:cleanup": "npm run check:unused"
   },
   "keywords": [
     "calling",
@@ -37,6 +39,7 @@
     "express-rate-limit": "^8.1.0",
     "helmet": "^8.1.0",
     "joi": "^18.0.1",
+    "livekit-server-sdk": "^2.14.0",
     "morgan": "^1.10.1",
     "multer": "^2.0.2",
     "node-cron": "^4.2.1",

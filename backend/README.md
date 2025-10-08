@@ -30,9 +30,8 @@ backend/
 │   ├── models/           # Business logic models
 │   ├── routes/           # API routes
 │   ├── services/         # Business services
-│   │   ├── CampaignManager.js
-│   │   ├── CallQueue.js
-│   │   ├── PythonExecutor.js
+│   │   ├── CampaignQueue.js
+│   │   ├── LiveKitExecutor.js
 │   │   └── WebhookHandler.js
 │   ├── utils/            # Utility functions
 │   │   └── logger.js
@@ -52,11 +51,37 @@ backend/
 ### 1. Prerequisites
 
 - Node.js 16+ and npm
-- PostgreSQL database
-- Redis server
-- Python environment (for integration with voice agent)
+- PostgreSQL database (or SQLite for development)
+- Redis server (optional, for queue management)
+- LiveKit account with configured agents and dispatch rules
 
-### 2. Installation
+### 2. LiveKit Dashboard Setup (Required)
+
+**Before running the application, configure dispatch rules in LiveKit Dashboard:**
+
+1. **Navigate to Agents** in LiveKit Dashboard
+2. **Create/Configure Agent** (e.g., "telephony-agent")
+   - Set agent behavior, prompts, and voice settings
+   - Note the agent name for use in campaigns
+
+3. **Set Dispatch Rule:**
+   ```
+   Room Pattern: outbound-*
+   Agent: telephony-agent
+   Auto-join: ✅ Enabled
+   ```
+
+4. **Configure SIP Trunk** (if using Twilio):
+   - Add your Twilio SIP trunk in LiveKit Dashboard
+   - Note the trunk ID (e.g., "ST_xxxxx")
+
+**Why Dispatch Rules?**
+- Agents automatically join rooms matching the pattern
+- No explicit dispatch API calls needed
+- Faster performance (~1 second vs ~2.5 seconds)
+- Simpler architecture and better scalability
+
+### 3. Installation
 
 ```bash
 # Navigate to backend directory
@@ -224,18 +249,36 @@ npm run db:seed      # Seed database with sample data
 
 ## 🚧 Roadmap
 
-- [ ] Phase 1: Foundation Setup ✅
-- [ ] Phase 2: Campaign APIs
-- [ ] Phase 3: Lead Management & CSV Upload
+- [x] Phase 1: Foundation Setup ✅
+- [x] Phase 2: Campaign APIs ✅
+- [x] Phase 3: Lead Management & CSV Upload ✅
 - [ ] Phase 4: Agent Management
-- [ ] Phase 5: Python Integration
-- [ ] Phase 6: Call Queue System
-- [ ] Phase 7: Campaign Manager
-- [ ] Phase 8: Webhook Handler
-- [ ] Phase 9: Scheduler
-- [ ] Phase 10: Analytics
-- [ ] Phase 11: Testing
-- [ ] Phase 12: Deployment
+- [x] Phase 5: LiveKit Integration ✅
+- [x] Phase 6: Call Queue System ✅
+- [ ] Phase 7: Webhook Handler
+- [ ] Phase 8: Scheduler
+- [ ] Phase 9: Analytics Dashboard
+- [ ] Phase 10: Testing & QA
+- [ ] Phase 11: Deployment
+
+## 📚 Additional Documentation
+
+- **[CODE-CLEANUP-GUIDE.md](./CODE-CLEANUP-GUIDE.md)** - Track unused code and technical debt
+- **[QUICK-CLEANUP-CHECKLIST.md](./QUICK-CLEANUP-CHECKLIST.md)** - Fast reference for cleanup tasks
+- **[MAINTENANCE-SCHEDULE.md](./MAINTENANCE-SCHEDULE.md)** - Monthly/quarterly maintenance tasks
+- **[CURRENT-ARCHITECTURE.md](./CURRENT-ARCHITECTURE.md)** - System architecture details
+- **[AGENT-AVAILABILITY-GUIDE.md](./AGENT-AVAILABILITY-GUIDE.md)** - Multi-agent setup guide
+- **[API-DOCUMENTATION.md](./API-DOCUMENTATION.md)** - Detailed API reference
+
+### Development Commands
+
+```bash
+# Run unused code checker
+npm run check:unused
+
+# Monthly maintenance
+# See MAINTENANCE-SCHEDULE.md for checklist
+```
 
 ## 📄 License
 

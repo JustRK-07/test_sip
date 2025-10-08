@@ -5,17 +5,23 @@
 
 const EventEmitter = require('events');
 const logger = require('../utils/logger');
-const PythonExecutor = require('./PythonExecutor');
+const LiveKitExecutor = require('./LiveKitExecutor');
 
 class CampaignQueue extends EventEmitter {
   constructor(options = {}) {
     super();
 
+    this.campaignId = options.campaignId;
     this.campaignName = options.campaignName || 'Test Campaign';
     this.maxConcurrent = options.maxConcurrent || 3;
     this.retryFailed = options.retryFailed || false;
     this.retryAttempts = options.retryAttempts || 2;
     this.callDelay = options.callDelay || 2000; // 2 seconds between calls
+
+    // LiveKit/SIP Configuration
+    this.agentName = options.agentName || 'telephony-agent';
+    this.sipTrunkId = options.sipTrunkId;
+    this.callerIdNumber = options.callerIdNumber;
 
     // Queues
     this.pendingLeads = [];
@@ -39,22 +45,25 @@ class CampaignQueue extends EventEmitter {
     this.isPaused = false;
 
     // Services
-    this.pythonExecutor = new PythonExecutor();
+    this.livekitExecutor = new LiveKitExecutor();
 
     logger.info(`📋 CampaignQueue initialized: "${this.campaignName}"`, {
+      campaignId: this.campaignId,
       maxConcurrent: this.maxConcurrent,
       retryFailed: this.retryFailed,
       retryAttempts: this.retryAttempts,
+      agentName: this.agentName,
+      sipTrunkId: this.sipTrunkId,
     });
   }
 
   /**
    * Add leads to the campaign
-   * @param {Array} leads - Array of lead objects {phoneNumber, name, ...}
+   * @param {Array} leads - Array of lead objects {id, phoneNumber, name, ...}
    */
   addLeads(leads) {
     const leadsWithMetadata = leads.map((lead, index) => ({
-      id: `lead-${Date.now()}-${index}`,
+      id: lead.id || `lead-${Date.now()}-${index}`, // Use database ID if available
       phoneNumber: lead.phoneNumber,
       name: lead.name || 'Unknown',
       priority: lead.priority || 0,
@@ -166,9 +175,12 @@ class CampaignQueue extends EventEmitter {
 
     this.emit('call_started', { lead });
 
-    // Create call promise
-    const callPromise = this.pythonExecutor
-      .makeCall(lead.phoneNumber)
+    // Generate unique room name
+    const roomName = this.livekitExecutor.generateRoomName(this.campaignId || 'unknown');
+
+    // Create call promise using LiveKitExecutor (faster, direct API call)
+    const callPromise = this.livekitExecutor
+      .makeCall(lead.phoneNumber, this.sipTrunkId, roomName, this.agentName)
       .then((result) => {
         // Call succeeded
         lead.status = 'completed';
@@ -181,6 +193,7 @@ class CampaignQueue extends EventEmitter {
         logger.info(`✅ Call completed: ${lead.name} (${lead.phoneNumber})`, {
           duration: result.duration,
           roomName: result.roomName,
+          participantId: result.participantId,
         });
 
         this.emit('call_completed', { lead, result });

@@ -44,6 +44,7 @@ model Campaign {
   leads           Lead[]
   callLogs        CallLog[]
   campaignAgents  CampaignAgent[]
+  phoneNumbers    PhoneNumber[]
 
   @@index([status])
   @@index([scheduledAt])
@@ -175,6 +176,7 @@ model Tenant {
   // Relations
   platformTrunks    PlatformTrunk[]
   livekitTrunks     LiveKitTrunk[]
+  phoneNumbers      PhoneNumber[]
 
   @@index([isActive])
   @@map("tenants")
@@ -242,6 +244,7 @@ model LiveKitTrunk {
   // Relations
   tenant              Tenant?       @relation(fields: [tenantId], references: [id], onDelete: SetNull)
   platformTrunk       PlatformTrunk @relation(fields: [platformTrunkId], references: [id], onDelete: Cascade)
+  phoneNumbers        PhoneNumber[]
 
   @@index([tenantId])
   @@index([platformTrunkId])
@@ -249,4 +252,46 @@ model LiveKitTrunk {
   @@index([trunkType])
   @@index([isActive])
   @@map("livekit_trunks")
+}
+
+// Phone Number Model (Purchased/Assigned phone numbers)
+model PhoneNumber {
+  id              String    @id @default(cuid())
+  number          String    @unique // E.164 format: +1234567890
+  friendlyName    String?   @map("friendly_name")
+
+  // Phone number type
+  type            String    @default("LOCAL")
+  // Types: LOCAL, TOLL_FREE, MOBILE
+
+  // Provider information
+  provider        String    @default("TWILIO")
+  providerSid     String?   @map("provider_sid") // Twilio phone number SID
+
+  // Relationships (all optional for flexibility)
+  tenantId        String?   @map("tenant_id")
+  livekitTrunkId  String?   @map("livekit_trunk_id")
+  campaignId      String?   @map("campaign_id")
+
+  // Status and metadata
+  isActive        Boolean   @default(true) @map("is_active")
+  metadata        String?   // JSON as string for SQLite
+
+  // Lifecycle dates
+  purchasedAt     DateTime? @map("purchased_at")
+  releasedAt      DateTime? @map("released_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  tenant          Tenant?      @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  livekitTrunk    LiveKitTrunk? @relation(fields: [livekitTrunkId], references: [id], onDelete: SetNull)
+  campaign        Campaign?    @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([livekitTrunkId])
+  @@index([campaignId])
+  @@index([isActive])
+  @@index([provider])
+  @@map("phone_numbers")
 }

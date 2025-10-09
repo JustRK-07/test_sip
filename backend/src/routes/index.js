@@ -12,6 +12,7 @@ const agentRoutes = require('./agentRoutes');
 const tenantRoutes = require('./tenantRoutes');
 const platformTrunkRoutes = require('./platformTrunkRoutes');
 const livekitTrunkRoutes = require('./livekitTrunkRoutes');
+const phoneNumberRoutes = require('./phoneNumbers');
 
 const router = express.Router();
 
@@ -31,6 +32,7 @@ router.use('/agents', agentRoutes);
 
 // Mount new routes (tenant and trunk management)
 router.use('/tenants', tenantRoutes);
+router.use('/tenants', phoneNumberRoutes); // Phone numbers are nested under tenants
 router.use('/platform-trunks', platformTrunkRoutes);
 router.use('/livekit-trunks', livekitTrunkRoutes);
 

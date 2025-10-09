@@ -8,6 +8,11 @@ const campaignRoutes = require('./campaignRoutes');
 const leadRoutes = require('./leadRoutes');
 const agentRoutes = require('./agentRoutes');
 
+// NEW: Tenant and Trunk management routes
+const tenantRoutes = require('./tenantRoutes');
+const platformTrunkRoutes = require('./platformTrunkRoutes');
+const livekitTrunkRoutes = require('./livekitTrunkRoutes');
+
 const router = express.Router();
 
 // Health check
@@ -19,9 +24,14 @@ router.get('/health', (req, res) => {
   });
 });
 
-// Mount routes
+// Mount existing routes
 router.use('/campaigns', campaignRoutes);
 router.use('/campaigns', leadRoutes); // Lead routes are nested under campaigns
 router.use('/agents', agentRoutes);
+
+// Mount new routes (tenant and trunk management)
+router.use('/tenants', tenantRoutes);
+router.use('/platform-trunks', platformTrunkRoutes);
+router.use('/livekit-trunks', livekitTrunkRoutes);
 
 module.exports = router;

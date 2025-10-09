@@ -154,3 +154,99 @@ model CallLog {
   @@index([callSid])
   @@map("call_logs")
 }
+
+// ============================================================================
+// NEW MODELS - Tenant and Trunk Management
+// These are ADDITIVE ONLY - existing models above are unchanged
+// ============================================================================
+
+// Tenant Model (Multi-tenancy support - OPTIONAL)
+model Tenant {
+  id          String   @id @default(cuid())
+  name        String
+  domain      String?  @unique
+  isActive    Boolean  @default(true) @map("is_active")
+
+  metadata    String?  // JSON as string for SQLite
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  platformTrunks    PlatformTrunk[]
+  livekitTrunks     LiveKitTrunk[]
+
+  @@index([isActive])
+  @@map("tenants")
+}
+
+// Platform Trunk Model (Twilio Elastic SIP Trunk)
+model PlatformTrunk {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+
+  // Twilio Configuration
+  twilioTrunkSid  String?  @unique @map("twilio_trunk_sid")
+  twilioRegion    String   @default("us1") @map("twilio_region")
+
+  // Optional tenant association (null = shared/system-level trunk)
+  tenantId        String?  @map("tenant_id")
+
+  maxChannels     Int      @default(100) @map("max_channels")
+  isActive        Boolean  @default(true) @map("is_active")
+
+  metadata        String?  // JSON as string for SQLite
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  tenant          Tenant?       @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  livekitTrunks   LiveKitTrunk[]
+
+  @@index([tenantId])
+  @@index([isActive])
+  @@map("platform_trunks")
+}
+
+// LiveKit Trunk Model (LiveKit SIP Trunk)
+model LiveKitTrunk {
+  id                  String   @id @default(cuid())
+  name                String
+  description         String?
+
+  // LiveKit Configuration
+  livekitTrunkId      String?  @unique @map("livekit_trunk_id") // LiveKit's SIP trunk ID
+  livekitRegion       String   @default("us-east-1") @map("livekit_region")
+  trunkType           String   @default("OUTBOUND") @map("trunk_type")
+  // Trunk types: INBOUND, OUTBOUND
+
+  status              String   @default("PROVISIONING")
+  // Status: ACTIVE, INACTIVE, PROVISIONING, ERROR, MAINTENANCE
+
+  // Relationships
+  tenantId            String?  @map("tenant_id")
+  platformTrunkId     String   @map("platform_trunk_id")
+
+  // Configuration
+  maxConcurrentCalls  Int      @default(10) @map("max_concurrent_calls")
+  codecPreferences    String?  @map("codec_preferences") // JSON array as string
+  isActive            Boolean  @default(true) @map("is_active")
+
+  metadata            String?  // JSON as string for SQLite
+
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  tenant              Tenant?       @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  platformTrunk       PlatformTrunk @relation(fields: [platformTrunkId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([platformTrunkId])
+  @@index([status])
+  @@index([trunkType])
+  @@index([isActive])
+  @@map("livekit_trunks")
+}

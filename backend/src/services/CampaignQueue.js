@@ -6,6 +6,7 @@
 const EventEmitter = require('events');
 const logger = require('../utils/logger');
 const LiveKitExecutor = require('./LiveKitExecutor');
+const AgentSelectionService = require('./AgentSelectionService');
 
 class CampaignQueue extends EventEmitter {
   constructor(options = {}) {
@@ -19,9 +20,12 @@ class CampaignQueue extends EventEmitter {
     this.callDelay = options.callDelay || 2000; // 2 seconds between calls
 
     // LiveKit/SIP Configuration
-    this.agentName = options.agentName || 'telephony-agent';
+    this.agentName = options.agentName || 'telephony-agent'; // Fallback for backward compatibility
     this.sipTrunkId = options.sipTrunkId;
     this.callerIdNumber = options.callerIdNumber;
+
+    // Agent selection strategy (default: primary_first)
+    this.agentSelectionStrategy = options.agentSelectionStrategy || AgentSelectionService.SELECTION_STRATEGIES.PRIMARY_FIRST;
 
     // Queues
     this.pendingLeads = [];
@@ -178,9 +182,33 @@ class CampaignQueue extends EventEmitter {
     // Generate unique room name
     const roomName = this.livekitExecutor.generateRoomName(this.campaignId || 'unknown');
 
+    // Select agent dynamically for this call
+    let selectedAgent = null;
+    let agentName = this.agentName; // Default fallback
+
+    if (this.campaignId) {
+      try {
+        selectedAgent = await AgentSelectionService.selectAgentForCampaign(
+          this.campaignId,
+          this.agentSelectionStrategy
+        );
+
+        if (selectedAgent) {
+          agentName = selectedAgent.livekitAgentName || selectedAgent.name;
+          logger.info(`🤖 Selected agent: ${selectedAgent.name} (LiveKit: ${agentName}, ID: ${selectedAgent.id})`);
+
+          // Track active call for this agent
+          AgentSelectionService.incrementActiveCall(selectedAgent.id);
+          lead.agentId = selectedAgent.id; // Store for cleanup
+        }
+      } catch (error) {
+        logger.warn(`Failed to select agent, using fallback: ${agentName}`, error);
+      }
+    }
+
     // Create call promise using LiveKitExecutor (faster, direct API call)
     const callPromise = this.livekitExecutor
-      .makeCall(lead.phoneNumber, this.sipTrunkId, roomName, this.agentName)
+      .makeCall(lead.phoneNumber, this.sipTrunkId, roomName, agentName)
       .then((result) => {
         // Call succeeded
         lead.status = 'completed';
@@ -223,6 +251,11 @@ class CampaignQueue extends EventEmitter {
         this.emit('call_failed', { lead, error });
       })
       .finally(() => {
+        // Decrement active call count for agent
+        if (lead.agentId) {
+          AgentSelectionService.decrementActiveCall(lead.agentId);
+        }
+
         // Remove from active calls
         this.activeLeads.delete(lead.id);
         this.stats.active = this.activeLeads.size;

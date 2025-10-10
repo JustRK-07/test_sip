@@ -1,5 +1,7 @@
 // Middleware to check if JWT acct matches tenantId
+// Admin users (with system admin account ID) can access any tenant
 const requireTenantAccess = (req, res, next) => {
+    const SYSTEM_ADMIN_ACCOUNT_ID = '00000000-0000-0000-0000-00000000b40d';
 
     if (req?.params?.tenantId && req?.body?.tenantId) {
         return res.status(403).json({
@@ -24,6 +26,12 @@ const requireTenantAccess = (req, res, next) => {
         });
     }
 
+    // Allow system admins to access any tenant
+    if (userAccountId === SYSTEM_ADMIN_ACCOUNT_ID) {
+        return next();
+    }
+
+    // Regular users must match the tenant ID
     if (userAccountId !== tenantId) {
         return res.status(403).json({
             error: {

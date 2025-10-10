@@ -3,10 +3,11 @@
  * Handles AI agent management and campaign assignments
  */
 
-const { PrismaClient } = require('@prisma/client');
+const { getPrismaClient } = require('../config/prisma');
 const logger = require('../utils/logger');
+const AgentSelectionService = require('../services/AgentSelectionService');
 
-const prisma = new PrismaClient();
+const prisma = getPrismaClient();
 
 /**
  * @route   POST /api/v1/agents
@@ -394,7 +395,7 @@ exports.removeAgentFromCampaign = async (req, res) => {
 
 /**
  * @route   GET /api/v1/campaigns/:campaignId/agents
- * @desc    Get all agents assigned to campaign
+ * @desc    Get all agents assigned to campaign with availability
  * @access  Public
  */
 exports.getCampaignAgents = async (req, res) => {
@@ -411,15 +412,105 @@ exports.getCampaignAgents = async (req, res) => {
       },
     });
 
+    // Add availability info
+    const agentsWithAvailability = assignments.map(assignment => {
+      const activeCalls = AgentSelectionService.activeCallsPerAgent.get(assignment.agent.id) || 0;
+      return {
+        ...assignment,
+        agent: {
+          ...assignment.agent,
+          activeCalls,
+          available: activeCalls < assignment.agent.maxConcurrentCalls,
+          loadPercentage: Math.round((activeCalls / assignment.agent.maxConcurrentCalls) * 100)
+        }
+      };
+    });
+
     res.json({
       success: true,
-      data: assignments,
+      data: agentsWithAvailability,
     });
   } catch (error) {
     logger.error('Error fetching campaign agents:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch campaign agents',
+      details: error.message,
+    });
+  }
+};
+
+/**
+ * @route   GET /api/v1/agents/load-stats
+ * @desc    Get agent load statistics
+ * @access  Public
+ */
+exports.getAgentLoadStats = async (req, res) => {
+  try {
+    const loadStats = AgentSelectionService.getAgentLoadStats();
+
+    // Get all agents with their current load
+    const agents = await prisma.agent.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        name: true,
+        maxConcurrentCalls: true
+      }
+    });
+
+    const agentsWithLoad = agents.map(agent => ({
+      ...agent,
+      activeCalls: loadStats[agent.id] || 0,
+      available: (loadStats[agent.id] || 0) < agent.maxConcurrentCalls,
+      loadPercentage: Math.round(((loadStats[agent.id] || 0) / agent.maxConcurrentCalls) * 100)
+    }));
+
+    res.json({
+      success: true,
+      data: agentsWithLoad,
+      summary: {
+        totalAgents: agents.length,
+        activeAgents: agentsWithLoad.filter(a => a.activeCalls > 0).length,
+        availableAgents: agentsWithLoad.filter(a => a.available).length,
+        totalActiveCalls: Object.values(loadStats).reduce((sum, calls) => sum + calls, 0)
+      }
+    });
+  } catch (error) {
+    logger.error('Error fetching agent load stats:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch agent load stats',
+      details: error.message,
+    });
+  }
+};
+
+/**
+ * @route   GET /api/v1/campaigns/:campaignId/agents/available
+ * @desc    Get available agents for campaign
+ * @access  Public
+ */
+exports.getCampaignAvailableAgents = async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+
+    const availableAgents = await AgentSelectionService.getAvailableAgents(campaignId);
+
+    res.json({
+      success: true,
+      data: availableAgents,
+      summary: {
+        total: availableAgents.length,
+        available: availableAgents.filter(a => a.available).length,
+        primary: availableAgents.filter(a => a.isPrimary).length
+      }
+    });
+  } catch (error) {
+    logger.error('Error fetching available agents:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch available agents',
       details: error.message,
     });
   }

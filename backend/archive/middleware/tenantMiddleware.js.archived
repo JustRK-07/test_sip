@@ -1,0 +1,134 @@
+/**
+ * Tenant Middleware
+ * Extracts tenantId from request and makes it available to controllers
+ *
+ * Tenant identification methods (in priority order):
+ * 1. X-Tenant-ID header
+ * 2. JWT token claim
+ * 3. Subdomain (e.g., acme.yourapp.com → tenantId: "acme")
+ * 4. Query parameter ?tenantId=xxx (for testing only)
+ */
+
+const { getPrismaClient } = require('../config/prisma');
+const logger = require('../utils/logger');
+
+const prisma = getPrismaClient();
+
+/**
+ * Extract tenant from request
+ * For now, using simple header-based approach
+ * In production, you'd use JWT tokens or session
+ */
+const extractTenant = async (req, res, next) => {
+  try {
+    let tenantId = null;
+
+    // Method 1: X-Tenant-ID header (most explicit)
+    if (req.headers['x-tenant-id']) {
+      tenantId = req.headers['x-tenant-id'];
+    }
+
+    // Method 2: Authorization JWT (extract from token)
+    // TODO: Implement when you add authentication
+    // if (req.user && req.user.tenantId) {
+    //   tenantId = req.user.tenantId;
+    // }
+
+    // Method 3: Subdomain extraction
+    if (!tenantId && process.env.ENABLE_SUBDOMAIN_TENANCY === 'true') {
+      const host = req.hostname || req.headers.host;
+      if (host) {
+        const subdomain = host.split('.')[0];
+        // Only use subdomain if it's not 'www', 'api', or 'localhost'
+        if (subdomain && !['www', 'api', 'localhost'].includes(subdomain)) {
+          // Look up tenant by subdomain
+          const tenant = await prisma.tenant.findFirst({
+            where: { domain: subdomain, isActive: true }
+          });
+          if (tenant) {
+            tenantId = tenant.id;
+          }
+        }
+      }
+    }
+
+    // Method 4: Query parameter (ONLY for testing/development)
+    if (!tenantId && process.env.NODE_ENV !== 'production' && req.query.tenantId) {
+      tenantId = req.query.tenantId;
+      logger.warn('Using tenantId from query parameter (development only)');
+    }
+
+    // Attach tenantId to request object
+    req.tenantId = tenantId;
+
+    // If tenant is required but not found, return error
+    if (process.env.REQUIRE_TENANT === 'true' && !tenantId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Tenant ID is required. Please provide X-Tenant-ID header.',
+      });
+    }
+
+    logger.debug('Tenant extracted:', { tenantId, path: req.path });
+    next();
+  } catch (error) {
+    logger.error('Error in tenant middleware:', error);
+    next(error);
+  }
+};
+
+/**
+ * Require tenant middleware
+ * Use this on routes that MUST have a tenant
+ */
+const requireTenant = (req, res, next) => {
+  if (!req.tenantId) {
+    return res.status(400).json({
+      success: false,
+      error: 'Tenant ID is required. Please provide X-Tenant-ID header.',
+    });
+  }
+  next();
+};
+
+/**
+ * Validate tenant exists and is active
+ */
+const validateTenant = async (req, res, next) => {
+  try {
+    if (!req.tenantId) {
+      return next(); // Skip validation if no tenant (handled by requireTenant if needed)
+    }
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: req.tenantId },
+    });
+
+    if (!tenant) {
+      return res.status(404).json({
+        success: false,
+        error: 'Tenant not found',
+      });
+    }
+
+    if (!tenant.isActive) {
+      return res.status(403).json({
+        success: false,
+        error: 'Tenant is inactive',
+      });
+    }
+
+    // Attach full tenant object to request
+    req.tenant = tenant;
+    next();
+  } catch (error) {
+    logger.error('Error validating tenant:', error);
+    next(error);
+  }
+};
+
+module.exports = {
+  extractTenant,
+  requireTenant,
+  validateTenant,
+};

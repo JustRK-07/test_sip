@@ -15,6 +15,7 @@
 
 const { AccessToken, SipClient, RoomServiceClient, AgentDispatchClient } = require('livekit-server-sdk');
 const logger = require('../utils/logger');
+const { formatPhoneNumber } = require('../utils/phoneValidation');
 
 class LiveKitExecutor {
   constructor() {
@@ -88,6 +89,29 @@ class LiveKitExecutor {
       if (!agentName) {
         throw new Error('Agent name is required');
       }
+
+      // Format phone number to E.164 format (+country code + number)
+      // Detect country code based on number length and format
+      let formattedPhoneNumber = phoneNumber;
+
+      if (!phoneNumber.startsWith('+')) {
+        // Auto-detect country: Indian numbers start with 91
+        if (phoneNumber.startsWith('91') && phoneNumber.length >= 12) {
+          // Indian number: 918766552802 -> +918766552802
+          formattedPhoneNumber = `+${phoneNumber}`;
+          logger.debug(`Formatted Indian number: ${phoneNumber} -> ${formattedPhoneNumber}`);
+        } else if (phoneNumber.length === 10) {
+          // US number without country code: 7048134431 -> +17048134431
+          formattedPhoneNumber = formatPhoneNumber(phoneNumber, 'US');
+          logger.debug(`Formatted US number: ${phoneNumber} -> ${formattedPhoneNumber}`);
+        } else {
+          // Try to format with Indian country code as default
+          formattedPhoneNumber = formatPhoneNumber(phoneNumber, 'IN');
+          logger.debug(`Formatted with IN country code: ${phoneNumber} -> ${formattedPhoneNumber}`);
+        }
+      }
+
+      phoneNumber = formattedPhoneNumber;
 
       // Step 1: Dispatch agent to room (explicit dispatch for availability-based routing)
       logger.debug(`Dispatching agent ${agentName} to room ${roomName}`);

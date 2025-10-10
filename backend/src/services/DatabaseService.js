@@ -1,4 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
+const { getPrismaClient } = require('../config/prisma');
 
 /**
  * Service class for database operations
@@ -6,7 +6,7 @@ const { PrismaClient } = require('@prisma/client');
  */
 class DatabaseService {
   constructor() {
-    this.prisma = new PrismaClient();
+    this.prisma = getPrismaClient();
   }
 
   /**

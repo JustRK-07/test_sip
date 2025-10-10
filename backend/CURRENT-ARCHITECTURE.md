@@ -9,7 +9,7 @@
 ```javascript
 // One API call to initiate outbound call
 sipClient.createSipParticipant(
-  sipTrunkId,      // "ST_xxxxx"
+  sipTrunkId,      // "ST_YOUR_TRUNK_ID"
   phoneNumber,     // "+14155550123"
   roomName,        // "outbound-campaign-123-xxx"
   options
@@ -101,7 +101,7 @@ Lead's Phone
 
   // LiveKit/SIP Configuration
   agentName: String,        // AI agent name (e.g., "telephony-agent")
-  sipTrunkId: String,       // SIP trunk ID (e.g., "ST_xxxxx")
+  sipTrunkId: String,       // SIP trunk ID (e.g., "ST_YOUR_TRUNK_ID")
   callerIdNumber: String,   // Caller ID to display
 
   // Status tracking
@@ -296,7 +296,7 @@ curl -X POST http://localhost:3000/api/v1/campaigns \
     "name": "Test Campaign",
     "maxConcurrent": 1,
     "agentName": "telephony-agent",
-    "sipTrunkId": "ST_xxxxx"
+    "sipTrunkId": "ST_YOUR_TRUNK_ID"
   }'
 
 # 2. Add lead

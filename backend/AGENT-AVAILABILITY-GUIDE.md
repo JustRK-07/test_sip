@@ -281,7 +281,7 @@ curl -X POST http://localhost:3000/api/v1/campaigns \
   -d '{
     "name": "Multi-Agent Campaign",
     "maxConcurrent": 8,
-    "sipTrunkId": "ST_xxxxx",
+    "sipTrunkId": "ST_YOUR_TRUNK_ID",
     "callerIdNumber": "+14155550100"
   }'
 

@@ -18,6 +18,9 @@ model Campaign {
   status          String    @default("draft")
   // Status values: draft, scheduled, active, paused, completed, stopped, failed
 
+  // Multi-tenancy support
+  tenantId        String?   @map("tenant_id")
+
   maxConcurrent   Int       @default(3) @map("max_concurrent")
   retryFailed     Boolean   @default(true) @map("retry_failed")
   retryAttempts   Int       @default(1) @map("retry_attempts")
@@ -41,11 +44,13 @@ model Campaign {
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
   // Relations
+  tenant          Tenant?   @relation(fields: [tenantId], references: [id], onDelete: SetNull)
   leads           Lead[]
   callLogs        CallLog[]
   campaignAgents  CampaignAgent[]
   phoneNumbers    PhoneNumber[]
 
+  @@index([tenantId])
   @@index([status])
   @@index([scheduledAt])
   @@map("campaigns")
@@ -55,6 +60,7 @@ model Campaign {
 model Agent {
   id                 String   @id @default(cuid())
   name               String
+  livekitAgentName   String?  @map("livekit_agent_name") // LiveKit worker name (e.g., "telephony-agent")
   description        String?
   voiceId            String?  @map("voice_id")
   personality        String?
@@ -72,6 +78,7 @@ model Agent {
   callLogs           CallLog[]
 
   @@index([isActive])
+  @@index([livekitAgentName])
   @@map("agents")
 }
 
@@ -97,12 +104,15 @@ model CampaignAgent {
 // Lead Model
 model Lead {
   id           String    @id @default(cuid())
-  campaignId   String    @map("campaign_id")
+  campaignId   String?   @map("campaign_id") // Made optional to allow unassigned leads
   phoneNumber  String    @map("phone_number")
   name         String?
   email        String?
   status       String    @default("pending")
   // Status values: pending, calling, answered, completed, no-answer, busy, failed
+
+  // Multi-tenancy support
+  tenantId     String?   @map("tenant_id")
 
   priority     Int       @default(1)
   attempts     Int       @default(0)
@@ -113,9 +123,11 @@ model Lead {
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
   // Relations
-  campaign     Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  tenant       Tenant?   @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  campaign     Campaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   callLogs     CallLog[]
 
+  @@index([tenantId])
   @@index([campaignId, status])
   @@index([phoneNumber])
   @@index([status])
@@ -174,9 +186,12 @@ model Tenant {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   // Relations
+  campaigns         Campaign[]
+  leads             Lead[]
   platformTrunks    PlatformTrunk[]
   livekitTrunks     LiveKitTrunk[]
   phoneNumbers      PhoneNumber[]
+  users             User[]
 
   @@index([isActive])
   @@map("tenants")
@@ -294,4 +309,41 @@ model PhoneNumber {
   @@index([isActive])
   @@index([provider])
   @@map("phone_numbers")
+}
+
+// ============================================================================
+// AUTHENTICATION - User Model
+// ============================================================================
+
+// User Model (Authentication and Authorization)
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String?
+
+  // User type
+  isAdmin      Boolean  @default(false) @map("is_admin")
+  // isAdmin = true → System admin (acct: "00000000-0000-0000-0000-00000000b40d")
+  // isAdmin = false → Regular user (acct: their tenantId)
+
+  // Regular user tenant association
+  tenantId     String?  @map("tenant_id")
+
+  // Account status
+  isActive     Boolean  @default(true) @map("is_active")
+
+  // Metadata
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  tenant       Tenant?  @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([email])
+  @@index([isAdmin])
+  @@index([tenantId])
+  @@index([isActive])
+  @@map("users")
 }

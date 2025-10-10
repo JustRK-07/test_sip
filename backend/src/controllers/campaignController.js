@@ -3,22 +3,24 @@
  * Handles all campaign-related API endpoints
  */
 
-const { PrismaClient } = require('@prisma/client');
+const { getPrismaClient } = require('../config/prisma');
 const CampaignQueue = require('../services/CampaignQueue');
 const logger = require('../utils/logger');
+const { addTenantFilter, addTenantToData } = require('../utils/tenantHelper');
 
-const prisma = new PrismaClient();
+const prisma = getPrismaClient();
 
 // Store active campaign instances
 const activeCampaigns = new Map();
 
 /**
- * @route   POST /api/v1/campaigns
+ * @route   POST /api/v1/tenants/:tenantId/campaigns
  * @desc    Create a new campaign
- * @access  Public (add auth later)
+ * @access  Protected (JWT required, tenant access validated)
  */
 exports.createCampaign = async (req, res) => {
   try {
+    const { tenantId } = req.params;
     const {
       name,
       description,
@@ -43,19 +45,22 @@ exports.createCampaign = async (req, res) => {
 
     // Create campaign in database
     const campaign = await prisma.campaign.create({
-      data: {
-        name,
-        description,
-        maxConcurrent,
-        retryFailed,
-        retryAttempts,
-        callDelay,
-        scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
-        status,
-        agentName,
-        sipTrunkId,
-        callerIdNumber,
-      },
+      data: addTenantToData(
+        {
+          name,
+          description,
+          maxConcurrent,
+          retryFailed,
+          retryAttempts,
+          callDelay,
+          scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+          status,
+          agentName,
+          sipTrunkId,
+          callerIdNumber,
+        },
+        tenantId
+      ),
     });
 
     logger.info(`Campaign created: ${campaign.id} - ${campaign.name}`);
@@ -75,12 +80,13 @@ exports.createCampaign = async (req, res) => {
 };
 
 /**
- * @route   GET /api/v1/campaigns
+ * @route   GET /api/v1/tenants/:tenantId/campaigns
  * @desc    Get all campaigns
- * @access  Public
+ * @access  Protected (JWT required, tenant access validated)
  */
 exports.getAllCampaigns = async (req, res) => {
   try {
+    const { tenantId } = req.params;
     const { status, page = 1, limit = 10 } = req.query;
 
     const skip = (page - 1) * limit;
@@ -89,6 +95,7 @@ exports.getAllCampaigns = async (req, res) => {
     if (status) {
       where.status = status;
     }
+    Object.assign(where, addTenantFilter(where, tenantId));
 
     const [campaigns, total] = await Promise.all([
       prisma.campaign.findMany({
@@ -129,16 +136,16 @@ exports.getAllCampaigns = async (req, res) => {
 };
 
 /**
- * @route   GET /api/v1/campaigns/:id
+ * @route   GET /api/v1/tenants/:tenantId/campaigns/:id
  * @desc    Get campaign by ID
- * @access  Public
+ * @access  Protected (JWT required, tenant access validated)
  */
 exports.getCampaignById = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { tenantId, id } = req.params;
 
-    const campaign = await prisma.campaign.findUnique({
-      where: { id },
+    const campaign = await prisma.campaign.findFirst({
+      where: addTenantFilter({ id }, tenantId),
       include: {
         leads: true,
         campaignAgents: {
@@ -171,13 +178,13 @@ exports.getCampaignById = async (req, res) => {
 };
 
 /**
- * @route   PUT /api/v1/campaigns/:id
+ * @route   PUT /api/v1/tenants/:tenantId/campaigns/:id
  * @desc    Update campaign
- * @access  Public
+ * @access  Protected (JWT required, tenant access validated)
  */
 exports.updateCampaign = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { tenantId, id } = req.params;
     const {
       name,
       description,
@@ -192,8 +199,8 @@ exports.updateCampaign = async (req, res) => {
     } = req.body;
 
     // Check if campaign exists
-    const existingCampaign = await prisma.campaign.findUnique({
-      where: { id },
+    const existingCampaign = await prisma.campaign.findFirst({
+      where: addTenantFilter({ id }, tenantId),
     });
 
     if (!existingCampaign) {
@@ -247,16 +254,16 @@ exports.updateCampaign = async (req, res) => {
 };
 
 /**
- * @route   DELETE /api/v1/campaigns/:id
+ * @route   DELETE /api/v1/tenants/:tenantId/campaigns/:id
  * @desc    Delete campaign
- * @access  Public
+ * @access  Protected (JWT required, tenant access validated)
  */
 exports.deleteCampaign = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { tenantId, id } = req.params;
 
-    const campaign = await prisma.campaign.findUnique({
-      where: { id },
+    const campaign = await prisma.campaign.findFirst({
+      where: addTenantFilter({ id }, tenantId),
     });
 
     if (!campaign) {
@@ -295,17 +302,17 @@ exports.deleteCampaign = async (req, res) => {
 };
 
 /**
- * @route   POST /api/v1/campaigns/:id/start
+ * @route   POST /api/v1/tenants/:tenantId/campaigns/:id/start
  * @desc    Start a campaign
- * @access  Public
+ * @access  Protected (JWT required, tenant access validated)
  */
 exports.startCampaign = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { tenantId, id } = req.params;
 
     // Get campaign with leads
-    const campaign = await prisma.campaign.findUnique({
-      where: { id },
+    const campaign = await prisma.campaign.findFirst({
+      where: addTenantFilter({ id }, tenantId),
       include: {
         leads: {
           where: {
@@ -474,13 +481,25 @@ exports.startCampaign = async (req, res) => {
 };
 
 /**
- * @route   POST /api/v1/campaigns/:id/stop
+ * @route   POST /api/v1/tenants/:tenantId/campaigns/:id/stop
  * @desc    Stop a campaign
- * @access  Public
+ * @access  Protected (JWT required, tenant access validated)
  */
 exports.stopCampaign = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { tenantId, id } = req.params;
+
+    // Verify campaign belongs to tenant before stopping
+    const campaign = await prisma.campaign.findFirst({
+      where: addTenantFilter({ id }, tenantId),
+    });
+
+    if (!campaign) {
+      return res.status(404).json({
+        success: false,
+        error: 'Campaign not found',
+      });
+    }
 
     const campaignQueue = activeCampaigns.get(id);
 
@@ -519,13 +538,25 @@ exports.stopCampaign = async (req, res) => {
 };
 
 /**
- * @route   POST /api/v1/campaigns/:id/pause
+ * @route   POST /api/v1/tenants/:tenantId/campaigns/:id/pause
  * @desc    Pause a campaign
- * @access  Public
+ * @access  Protected (JWT required, tenant access validated)
  */
 exports.pauseCampaign = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { tenantId, id } = req.params;
+
+    // Verify campaign belongs to tenant before pausing
+    const campaign = await prisma.campaign.findFirst({
+      where: addTenantFilter({ id }, tenantId),
+    });
+
+    if (!campaign) {
+      return res.status(404).json({
+        success: false,
+        error: 'Campaign not found',
+      });
+    }
 
     const campaignQueue = activeCampaigns.get(id);
 
@@ -560,13 +591,25 @@ exports.pauseCampaign = async (req, res) => {
 };
 
 /**
- * @route   POST /api/v1/campaigns/:id/resume
+ * @route   POST /api/v1/tenants/:tenantId/campaigns/:id/resume
  * @desc    Resume a paused campaign
- * @access  Public
+ * @access  Protected (JWT required, tenant access validated)
  */
 exports.resumeCampaign = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { tenantId, id } = req.params;
+
+    // Verify campaign belongs to tenant before resuming
+    const campaign = await prisma.campaign.findFirst({
+      where: addTenantFilter({ id }, tenantId),
+    });
+
+    if (!campaign) {
+      return res.status(404).json({
+        success: false,
+        error: 'Campaign not found',
+      });
+    }
 
     const campaignQueue = activeCampaigns.get(id);
 
@@ -601,16 +644,16 @@ exports.resumeCampaign = async (req, res) => {
 };
 
 /**
- * @route   GET /api/v1/campaigns/:id/stats
+ * @route   GET /api/v1/tenants/:tenantId/campaigns/:id/stats
  * @desc    Get campaign statistics
- * @access  Public
+ * @access  Protected (JWT required, tenant access validated)
  */
 exports.getCampaignStats = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { tenantId, id } = req.params;
 
-    const campaign = await prisma.campaign.findUnique({
-      where: { id },
+    const campaign = await prisma.campaign.findFirst({
+      where: addTenantFilter({ id }, tenantId),
       include: {
         leads: true,
         callLogs: true,

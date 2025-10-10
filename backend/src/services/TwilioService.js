@@ -142,6 +142,112 @@ class TwilioService {
   }
 
   /**
+   * Purchase a phone number from Twilio
+   * @param {Object} options Purchase options
+   * @param {string} options.phoneNumber Phone number to purchase (E.164 format)
+   * @param {string} options.friendlyName Friendly name for the phone number
+   * @param {string} [options.trunkSid] Optional trunk SID to associate with
+   * @returns {Promise<Object>} Purchased phone number information
+   */
+  async purchasePhoneNumber(options) {
+    const client = this.getClient();
+
+    const purchaseParams = {
+      phoneNumber: options.phoneNumber,
+      friendlyName: options.friendlyName,
+    };
+
+    // Include trunkSid if provided to automatically associate with the Twilio trunk
+    if (options.trunkSid) {
+      purchaseParams.trunkSid = options.trunkSid;
+    }
+
+    logger.info(`Purchasing phone number: ${options.phoneNumber}`, {
+      friendlyName: options.friendlyName,
+      trunkSid: options.trunkSid || 'none',
+    });
+
+    const result = await client.incomingPhoneNumbers.create(purchaseParams);
+
+    logger.info(`Phone number purchased successfully`, {
+      phoneNumber: result.phoneNumber,
+      sid: result.sid,
+    });
+
+    return result;
+  }
+
+  /**
+   * Search for available phone numbers
+   * @param {Object} searchParams Search parameters
+   * @param {string} [searchParams.country='US'] Country code
+   * @param {string} searchParams.type Number type (LOCAL, MOBILE, TOLL_FREE)
+   * @param {string} [searchParams.areaCode] Area code to search for
+   * @param {string} [searchParams.contains] Digits that the number should contain
+   * @param {number} [searchParams.limit=20] Maximum number of results
+   * @returns {Promise<Array>} Available phone numbers
+   */
+  async searchAvailableNumbers(searchParams) {
+    const client = this.getClient();
+
+    const {
+      country = 'US',
+      type,
+      areaCode,
+      contains,
+      limit = 20
+    } = searchParams;
+
+    const searchOptions = {
+      limit: Math.min(50, Math.max(1, limit)),
+      ...(areaCode && { areaCode }),
+      ...(contains && { contains })
+    };
+
+    let availableNumbers = [];
+
+    if (type === 'TOLL_FREE') {
+      availableNumbers = await client.availablePhoneNumbers(country)
+        .tollFree
+        .list(searchOptions);
+    } else if (type === 'MOBILE') {
+      availableNumbers = await client.availablePhoneNumbers(country)
+        .mobile
+        .list(searchOptions);
+    } else {
+      // LOCAL or default
+      availableNumbers = await client.availablePhoneNumbers(country)
+        .local
+        .list(searchOptions);
+    }
+
+    logger.info(`Found ${availableNumbers.length} available phone numbers`, {
+      country,
+      type,
+      areaCode,
+    });
+
+    return availableNumbers;
+  }
+
+  /**
+   * Release a phone number from Twilio
+   * @param {string} phoneNumberSid Phone number SID to release
+   * @returns {Promise<boolean>} True if released successfully
+   */
+  async releasePhoneNumber(phoneNumberSid) {
+    const client = this.getClient();
+
+    logger.info(`Releasing phone number: ${phoneNumberSid}`);
+
+    await client.incomingPhoneNumbers(phoneNumberSid).remove();
+
+    logger.info(`Phone number released successfully: ${phoneNumberSid}`);
+
+    return true;
+  }
+
+  /**
    * Handle Twilio errors and provide user-friendly error codes
    * @param {Error} error Twilio error
    * @returns {Object} Formatted error information

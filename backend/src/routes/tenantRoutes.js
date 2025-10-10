@@ -1,10 +1,10 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
+const { getPrismaClient } = require('../config/prisma');
 const { authenticateToken, requireRole, requireAccount } = require('../middleware/auth');
 const { randomBytes } = require('crypto');
 
 const router = express.Router();
-const prisma = new PrismaClient();
+const prisma = getPrismaClient();
 
 // ID generation helper (similar to cuid format)
 const generateTenantId = () => {

@@ -74,5 +74,15 @@ async def make_call(phone_number: str):
 
 if __name__ == "__main__":
     import sys
-    phone = "+919529117230" if len(sys.argv) < 2 else sys.argv[1]
+
+    if len(sys.argv) < 2:
+        print("\n❌ Error: Phone number is required")
+        print("\nUsage:")
+        print(f"  python {sys.argv[0]} <phone_number>")
+        print("\nExample:")
+        print(f"  python {sys.argv[0]} +14155551234")
+        print(f"  python {sys.argv[0]} +919529117230")
+        sys.exit(1)
+
+    phone = sys.argv[1]
     asyncio.run(make_call(phone))

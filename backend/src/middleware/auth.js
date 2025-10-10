@@ -179,6 +179,7 @@ const requireRole = (roles) => {
 /**
  * Account-based access control middleware
  * Restricts access to a specific account ID from JWT token
+ * Admin users (with system admin account ID) can access all tenants
  */
 const requireAccount = (allowedAccountId) => {
   return (req, res, next) => {
@@ -192,7 +193,8 @@ const requireAccount = (allowedAccountId) => {
     }
 
     const userAccountId = req.user.acct;
-    
+    const SYSTEM_ADMIN_ACCOUNT_ID = '00000000-0000-0000-0000-00000000b40d';
+
     if (!userAccountId) {
       return res.status(403).json({
         error: {
@@ -202,11 +204,17 @@ const requireAccount = (allowedAccountId) => {
       });
     }
 
+    // Allow system admins to access any tenant
+    if (userAccountId === SYSTEM_ADMIN_ACCOUNT_ID) {
+      return next();
+    }
+
+    // Regular users must match the tenant ID
     if (userAccountId !== allowedAccountId) {
       return res.status(403).json({
         error: {
-          message: 'Access denied for this account',
-          code: 'ACCOUNT_ACCESS_DENIED',
+          message: 'Access denied: Account ID does not match tenant ID',
+          code: 'TENANT_ACCESS_DENIED',
           required: allowedAccountId,
           current: userAccountId
         }

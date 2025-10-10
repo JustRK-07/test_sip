@@ -3,14 +3,15 @@
  * Handles lead management (add, upload CSV, bulk operations)
  */
 
-const { PrismaClient } = require('@prisma/client');
+const { getPrismaClient } = require('../config/prisma');
 const multer = require('multer');
 const csv = require('csv-parser');
 const fs = require('fs');
 const path = require('path');
 const logger = require('../utils/logger');
+const { addTenantFilter, addTenantToData } = require('../utils/tenantHelper');
 
-const prisma = new PrismaClient();
+const prisma = getPrismaClient();
 
 // Configure multer for CSV upload
 const upload = multer({
@@ -28,13 +29,13 @@ const upload = multer({
 });
 
 /**
- * @route   POST /api/v1/campaigns/:campaignId/leads
+ * @route   POST /api/v1/tenants/:tenantId/campaigns/:campaignId/leads
  * @desc    Add a single lead to campaign
- * @access  Public
+ * @access  Protected (JWT required, tenant access validated)
  */
 exports.addLead = async (req, res) => {
   try {
-    const { campaignId } = req.params;
+    const { tenantId, campaignId } = req.params;
     const { phoneNumber, name, priority = 1, metadata = {} } = req.body;
 
     // Validation
@@ -46,8 +47,8 @@ exports.addLead = async (req, res) => {
     }
 
     // Check if campaign exists
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: campaignId },
+    const campaign = await prisma.campaign.findFirst({
+      where: addTenantFilter({ id: campaignId }, tenantId),
     });
 
     if (!campaign) {
@@ -74,14 +75,17 @@ exports.addLead = async (req, res) => {
 
     // Create lead
     const lead = await prisma.lead.create({
-      data: {
-        campaignId,
-        phoneNumber,
-        name: name || phoneNumber,
-        priority,
-        metadata: metadata ? JSON.stringify(metadata) : null,
-        status: 'pending',
-      },
+      data: addTenantToData(
+        {
+          campaignId,
+          phoneNumber,
+          name: name || phoneNumber,
+          priority,
+          metadata: metadata ? JSON.stringify(metadata) : null,
+          status: 'pending',
+        },
+        tenantId
+      ),
     });
 
     logger.info(`Lead added to campaign ${campaignId}: ${phoneNumber}`);
@@ -101,13 +105,13 @@ exports.addLead = async (req, res) => {
 };
 
 /**
- * @route   POST /api/v1/campaigns/:campaignId/leads/bulk
+ * @route   POST /api/v1/tenants/:tenantId/campaigns/:campaignId/leads/bulk
  * @desc    Add multiple leads to campaign
- * @access  Public
+ * @access  Protected (JWT required, tenant access validated)
  */
 exports.addLeadsBulk = async (req, res) => {
   try {
-    const { campaignId } = req.params;
+    const { tenantId, campaignId } = req.params;
     const { leads } = req.body;
 
     if (!Array.isArray(leads) || leads.length === 0) {
@@ -118,8 +122,8 @@ exports.addLeadsBulk = async (req, res) => {
     }
 
     // Check if campaign exists
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: campaignId },
+    const campaign = await prisma.campaign.findFirst({
+      where: addTenantFilter({ id: campaignId }, tenantId),
     });
 
     if (!campaign) {
@@ -145,14 +149,19 @@ exports.addLeadsBulk = async (req, res) => {
         continue;
       }
 
-      validLeads.push({
-        campaignId,
-        phoneNumber: lead.phoneNumber,
-        name: lead.name || lead.phoneNumber,
-        priority: lead.priority || 1,
-        metadata: lead.metadata ? JSON.stringify(lead.metadata) : null,
-        status: 'pending',
-      });
+      validLeads.push(
+        addTenantToData(
+          {
+            campaignId,
+            phoneNumber: lead.phoneNumber,
+            name: lead.name || lead.phoneNumber,
+            priority: lead.priority || 1,
+            metadata: lead.metadata ? JSON.stringify(lead.metadata) : null,
+            status: 'pending',
+          },
+          tenantId
+        )
+      );
     }
 
     // Create leads (Note: SQLite doesn't support skipDuplicates, so we'll handle duplicates manually)
@@ -192,15 +201,15 @@ exports.addLeadsBulk = async (req, res) => {
 };
 
 /**
- * @route   POST /api/v1/campaigns/:campaignId/leads/upload
+ * @route   POST /api/v1/tenants/:tenantId/campaigns/:campaignId/leads/upload
  * @desc    Upload CSV file with leads
- * @access  Public
+ * @access  Protected (JWT required, tenant access validated)
  */
 exports.uploadLeadsCSV = [
   upload.single('file'),
   async (req, res) => {
     try {
-      const { campaignId } = req.params;
+      const { tenantId, campaignId } = req.params;
 
       if (!req.file) {
         return res.status(400).json({
@@ -210,8 +219,8 @@ exports.uploadLeadsCSV = [
       }
 
       // Check if campaign exists
-      const campaign = await prisma.campaign.findUnique({
-        where: { id: campaignId },
+      const campaign = await prisma.campaign.findFirst({
+        where: addTenantFilter({ id: campaignId }, tenantId),
       });
 
       if (!campaign) {
@@ -242,14 +251,19 @@ exports.uploadLeadsCSV = [
               return;
             }
 
-            leads.push({
-              campaignId,
-              phoneNumber: phoneNumber.trim(),
-              name: row.name?.trim() || phoneNumber.trim(),
-              priority: parseInt(row.priority) || 1,
-              metadata: row.metadata ? JSON.parse(row.metadata) : {},
-              status: 'pending',
-            });
+            leads.push(
+              addTenantToData(
+                {
+                  campaignId,
+                  phoneNumber: phoneNumber.trim(),
+                  name: row.name?.trim() || phoneNumber.trim(),
+                  priority: parseInt(row.priority) || 1,
+                  metadata: row.metadata ? JSON.parse(row.metadata) : {},
+                  status: 'pending',
+                },
+                tenantId
+              )
+            );
           })
           .on('end', resolve)
           .on('error', reject);
@@ -309,18 +323,21 @@ exports.uploadLeadsCSV = [
 ];
 
 /**
- * @route   GET /api/v1/campaigns/:campaignId/leads
+ * @route   GET /api/v1/tenants/:tenantId/campaigns/:campaignId/leads
  * @desc    Get all leads for a campaign
- * @access  Public
+ * @access  Protected (JWT required, tenant access validated)
  */
 exports.getLeads = async (req, res) => {
   try {
-    const { campaignId } = req.params;
+    const { tenantId, campaignId } = req.params;
     const { status, page = 1, limit = 50 } = req.query;
 
     const skip = (page - 1) * limit;
 
-    const where = { campaignId };
+    const where = {
+      campaignId,
+      ...addTenantFilter({}, tenantId),
+    };
     if (status) {
       where.status = status;
     }
@@ -356,18 +373,19 @@ exports.getLeads = async (req, res) => {
 };
 
 /**
- * @route   GET /api/v1/campaigns/:campaignId/leads/:leadId
+ * @route   GET /api/v1/tenants/:tenantId/campaigns/:campaignId/leads/:leadId
  * @desc    Get a single lead
- * @access  Public
+ * @access  Protected (JWT required, tenant access validated)
  */
 exports.getLead = async (req, res) => {
   try {
-    const { campaignId, leadId } = req.params;
+    const { tenantId, campaignId, leadId } = req.params;
 
     const lead = await prisma.lead.findFirst({
       where: {
         id: leadId,
         campaignId,
+        ...addTenantFilter({}, tenantId),
       },
       include: {
         callLogs: true,
@@ -396,19 +414,20 @@ exports.getLead = async (req, res) => {
 };
 
 /**
- * @route   PUT /api/v1/campaigns/:campaignId/leads/:leadId
+ * @route   PUT /api/v1/tenants/:tenantId/campaigns/:campaignId/leads/:leadId
  * @desc    Update a lead
- * @access  Public
+ * @access  Protected (JWT required, tenant access validated)
  */
 exports.updateLead = async (req, res) => {
   try {
-    const { campaignId, leadId } = req.params;
+    const { tenantId, campaignId, leadId } = req.params;
     const { phoneNumber, name, priority, metadata } = req.body;
 
     const lead = await prisma.lead.findFirst({
       where: {
         id: leadId,
         campaignId,
+        ...addTenantFilter({}, tenantId),
       },
     });
 
@@ -447,18 +466,19 @@ exports.updateLead = async (req, res) => {
 };
 
 /**
- * @route   DELETE /api/v1/campaigns/:campaignId/leads/:leadId
+ * @route   DELETE /api/v1/tenants/:tenantId/campaigns/:campaignId/leads/:leadId
  * @desc    Delete a lead
- * @access  Public
+ * @access  Protected (JWT required, tenant access validated)
  */
 exports.deleteLead = async (req, res) => {
   try {
-    const { campaignId, leadId } = req.params;
+    const { tenantId, campaignId, leadId } = req.params;
 
     const lead = await prisma.lead.findFirst({
       where: {
         id: leadId,
         campaignId,
+        ...addTenantFilter({}, tenantId),
       },
     });
 
@@ -498,16 +518,16 @@ exports.deleteLead = async (req, res) => {
 };
 
 /**
- * @route   DELETE /api/v1/campaigns/:campaignId/leads
+ * @route   DELETE /api/v1/tenants/:tenantId/campaigns/:campaignId/leads
  * @desc    Delete all leads from campaign
- * @access  Public
+ * @access  Protected (JWT required, tenant access validated)
  */
 exports.deleteAllLeads = async (req, res) => {
   try {
-    const { campaignId } = req.params;
+    const { tenantId, campaignId } = req.params;
 
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: campaignId },
+    const campaign = await prisma.campaign.findFirst({
+      where: addTenantFilter({ id: campaignId }, tenantId),
     });
 
     if (!campaign) {
@@ -525,7 +545,7 @@ exports.deleteAllLeads = async (req, res) => {
     }
 
     const result = await prisma.lead.deleteMany({
-      where: { campaignId },
+      where: addTenantFilter({ campaignId }, tenantId),
     });
 
     logger.info(`${result.count} leads deleted from campaign ${campaignId}`);

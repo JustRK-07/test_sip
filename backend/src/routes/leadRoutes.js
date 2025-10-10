@@ -1,8 +1,11 @@
 /**
  * Lead Routes (nested under campaigns)
+ * Pattern: /api/v1/tenants/:tenantId/campaigns/:campaignId/leads
  */
 
 const express = require('express');
+const { authenticateToken } = require('../middleware/auth');
+const { requireTenantAccess } = require('../utils/routeUtils');
 const {
   addLead,
   addLeadsBulk,
@@ -16,14 +19,14 @@ const {
 
 const router = express.Router();
 
-// Lead management (all nested under /campaigns/:campaignId)
-router.post('/:campaignId/leads', addLead);
-router.post('/:campaignId/leads/bulk', addLeadsBulk);
-router.post('/:campaignId/leads/upload', uploadLeadsCSV);
-router.get('/:campaignId/leads', getLeads);
-router.get('/:campaignId/leads/:leadId', getLead);
-router.put('/:campaignId/leads/:leadId', updateLead);
-router.delete('/:campaignId/leads/:leadId', deleteLead);
-router.delete('/:campaignId/leads', deleteAllLeads);
+// Lead management (all nested under /tenants/:tenantId/campaigns/:campaignId)
+router.post('/:tenantId/campaigns/:campaignId/leads', authenticateToken, requireTenantAccess, addLead);
+router.post('/:tenantId/campaigns/:campaignId/leads/bulk', authenticateToken, requireTenantAccess, addLeadsBulk);
+router.post('/:tenantId/campaigns/:campaignId/leads/upload', authenticateToken, requireTenantAccess, uploadLeadsCSV);
+router.get('/:tenantId/campaigns/:campaignId/leads', authenticateToken, requireTenantAccess, getLeads);
+router.get('/:tenantId/campaigns/:campaignId/leads/:leadId', authenticateToken, requireTenantAccess, getLead);
+router.put('/:tenantId/campaigns/:campaignId/leads/:leadId', authenticateToken, requireTenantAccess, updateLead);
+router.delete('/:tenantId/campaigns/:campaignId/leads/:leadId', authenticateToken, requireTenantAccess, deleteLead);
+router.delete('/:tenantId/campaigns/:campaignId/leads', authenticateToken, requireTenantAccess, deleteAllLeads);
 
 module.exports = router;

@@ -73,7 +73,7 @@ backend/
 
 4. **Configure SIP Trunk** (if using Twilio):
    - Add your Twilio SIP trunk in LiveKit Dashboard
-   - Note the trunk ID (e.g., "ST_xxxxx")
+   - Note the trunk ID (e.g., "ST_YOUR_TRUNK_ID")
 
 **Why Dispatch Rules?**
 - Agents automatically join rooms matching the pattern

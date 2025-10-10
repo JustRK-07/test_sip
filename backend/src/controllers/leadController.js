@@ -258,7 +258,7 @@ exports.uploadLeadsCSV = [
                   phoneNumber: phoneNumber.trim(),
                   name: row.name?.trim() || phoneNumber.trim(),
                   priority: parseInt(row.priority) || 1,
-                  metadata: row.metadata ? JSON.parse(row.metadata) : {},
+                  metadata: row.metadata || null,
                   status: 'pending',
                 },
                 tenantId

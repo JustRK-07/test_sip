@@ -397,7 +397,7 @@ exports.startCampaign = async (req, res) => {
             dispatchId: result.dispatchId, // Agent dispatch ID
             callSid: result.sipCallId, // LiveKit SIP call ID
             duration: result.duration,
-            metadata: result,
+            metadata: JSON.stringify(result),
           },
         }),
       ]);
@@ -416,7 +416,7 @@ exports.startCampaign = async (req, res) => {
             phoneNumber: lead.phoneNumber,
             status: 'failed',
             error: error.error || error.message,
-            metadata: error,
+            metadata: JSON.stringify(error),
           },
         }),
       ]);
